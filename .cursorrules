@@ -1,0 +1,254 @@
+# SpectralLab - System Prompt & Cursor Rules
+
+You are an expert Computer Vision Engineer and Senior Vue.js Developer. You are building "SpectralLab", a professional-grade web tool for frequency domain analysis of images.
+
+## 1. Project Context
+- **Goal**: Create a comprehensive multi-image frequency domain analysis platform supporting FFT, DWT, DCT, WPT, and DT-CWT transformations with detailed spectral information analysis (frequency band ratios, visualizations, etc.).
+- **User Base**: CV Researchers looking for intuitive understanding of spectral properties (High/Low frequency, Saliency, Frequency Band Distribution, etc.).
+
+## 2. Tech Stack Constraints
+- **Framework**: Vue 3 (Composition API + `<script setup>` only).
+- **Build**: Vite.
+- **Styling**: Tailwind CSS (Default to Dark Mode: `bg-slate-900`, `text-slate-200`).
+- **Core Algorithm**: OpenCV.js (WebAssembly) + Custom implementations for DWT/WPT/DT-CWT.
+- **Additional Libraries**: Consider `wavelets` or `jsdsp` for advanced wavelet transforms if OpenCV.js limitations exist.
+
+## 3. CRITICAL RULES (Must Follow)
+
+### 3.1 OpenCV.js Memory Management (Highest Priority)
+OpenCV.js does NOT have garbage collection for `cv.Mat` objects. You MUST manage memory manually to prevent browser crashes.
+- **Rule**: Every time you create a `new cv.Mat()`, `src.clone()`, or produce a result from a cv function (e.g., `cv.dft`), you MUST explicitly call `.delete()` on it when done.
+- **Pattern**: Use `try...finally` blocks for complex operations.
+
+    let mat = new cv.Mat();
+    try {
+        // operations
+    } finally {
+        mat.delete();
+    }
+
+- **Vue Reactivity Warning**: NEVER wrap `cv.Mat` objects in Vue's `ref()` or `reactive()`. This causes performance issues and errors. Store them in raw variables or standard JS objects if persistence is needed.
+
+### 3.2 Frequency Domain Logic
+When visualizing the spectrum, strictly follow this standard pipeline:
+1. **Grayscale**: Convert input to `CV_64F` single channel.
+2. **Transform**: Apply selected transform (DFT/DCT/DWT/WPT/DT-CWT).
+3. **Magnitude/Energy**: Calculate magnitude or energy from transform coefficients.
+4. **Log Scale**: Apply M' = log(1 + M) to make high frequencies visible (for DFT/DCT).
+5. **Normalization**: Normalize to [0, 1] or [0, 255] for display.
+6. **Centering (Shift)**: For DFT, implement `fftShift` (quadrant swap) so zero-frequency (DC component) is at the center.
+
+### 3.3 Code Style & Architecture
+- **Composables**: Encapsulate CV logic in `composables/` (e.g., `useOpenCV.js`, `useFrequency.js`, `useWavelet.js`, `useDCT.js`). Keep components clean.
+- **Transform Modules**: Create separate modules for each transform type in `composables/transforms/`.
+- **Math**: Use strict typing for math operations where possible.
+- **Comments**: Add comments explaining the math behind CV operations (e.g., "Applying Gaussian Low Pass Filter equation...").
+- **UI/UX**: Prioritize beautiful, professional, and intuitive interface design. Use smooth animations, proper spacing, and modern design patterns.
+
+## 4. Implementation Roadmap
+
+### Phase 1: Setup & Foundation ✅
+- [x] Initialize Vue + Tailwind.
+- [x] Create `useOpenCV` hook to handle async loading of `cv`.
+- [x] Implement `SpatialView` and `FrequencyView` components.
+- [x] Implement `fftShift` algorithm.
+- [x] Render Log-Magnitude spectrum to Canvas.
+
+### Phase 2: Multi-Image Management
+- [ ] **Image Gallery Component**: Create `ImageGallery.vue` for managing multiple images.
+  - [ ] Support drag-and-drop multiple file selection.
+  - [ ] Display image thumbnails in a grid layout.
+  - [ ] Allow selection/deselection of images.
+  - [ ] Show image metadata (name, size, dimensions).
+  - [ ] Support image deletion from gallery.
+- [ ] **Image State Management**: 
+  - [ ] Create `useImageManager.js` composable to manage image collection.
+  - [ ] Store image data (DataURL, metadata, processed results).
+  - [ ] Implement image selection state.
+- [ ] **UI Layout Update**:
+  - [ ] Three-pane layout: Gallery (left sidebar) | Spatial View (center) | Frequency View (right).
+  - [ ] Responsive design with collapsible panels.
+
+### Phase 3: Transform Methods Implementation
+
+#### 3.1 Discrete Fourier Transform (DFT/FFT) ✅
+- [x] Forward DFT with `cv.dft`.
+- [ ] Inverse DFT (iDFT) for reconstruction.
+- [ ] Frequency filtering (Low-pass, High-pass, Band-pass, Band-stop).
+
+#### 3.2 Discrete Cosine Transform (DCT)
+- [ ] Implement forward DCT using `cv.dct`.
+- [ ] Implement inverse DCT using `cv.idct`.
+- [ ] Create `useDCT.js` composable.
+- [ ] Visualize DCT coefficients (similar to DFT magnitude).
+- [ ] Calculate frequency band energy distribution.
+
+#### 3.3 Discrete Wavelet Transform (DWT)
+- [ ] **Wavelet Base Selection**: Support common wavelets (Haar, Daubechies, Coiflet, etc.).
+- [ ] **Multi-level Decomposition**: Implement 2D DWT with configurable levels (1-5 levels).
+- [ ] **Sub-band Visualization**: Display LL, LH, HL, HH sub-bands separately.
+- [ ] **Energy Calculation**: Calculate energy in each sub-band.
+- [ ] **Reconstruction**: Implement inverse DWT (iDWT).
+- [ ] Create `useWavelet.js` composable.
+- **Note**: OpenCV.js doesn't have built-in DWT. Need to implement manually or use a JS library.
+
+#### 3.4 Wavelet Packet Transform (WPT)
+- [ ] **Full Tree Decomposition**: Implement complete WPT tree structure.
+- [ ] **Node Selection**: Allow users to select specific nodes for analysis.
+- [ ] **Energy Distribution**: Calculate energy in each packet node.
+- [ ] **Visualization**: Display WPT tree structure and selected node coefficients.
+- [ ] **Reconstruction**: Implement selective reconstruction from chosen nodes.
+- [ ] Create `useWaveletPacket.js` composable.
+
+#### 3.5 Dual-Tree Complex Wavelet Transform (DT-CWT)
+- [ ] **Dual Tree Structure**: Implement two parallel DWT trees (real and imaginary).
+- [ ] **Directional Selectivity**: Leverage 6 directional sub-bands.
+- [ ] **Magnitude/Phase Visualization**: Display magnitude and phase separately.
+- [ ] **Energy Analysis**: Calculate directional energy distribution.
+- [ ] **Reconstruction**: Implement inverse DT-CWT.
+- [ ] Create `useDualTreeCWT.js` composable.
+- **Note**: Most complex transform, may require custom implementation or specialized library.
+
+### Phase 4: Frequency Domain Information Analysis
+
+#### 4.1 Frequency Band Energy Ratio
+- [ ] **Band Definition**: 
+  - For DFT: Low (0-25%), Mid (25-75%), High (75-100%) frequency bands.
+  - For DWT: Energy in each sub-band (LL, LH, HL, HH) and their ratios.
+  - For DCT: Low-frequency vs High-frequency coefficient energy.
+- [ ] **Energy Calculation**: 
+  - Calculate total energy: E_total = Σ|coefficient|²
+  - Calculate band energy: E_band = Σ|coefficient_band|²
+  - Calculate ratio: Ratio = E_band / E_total
+- [ ] **Statistics Display**: 
+  - Show energy ratios as percentages.
+  - Display bar charts or pie charts for visualization.
+  - Show numerical statistics table.
+
+#### 4.2 Advanced Visualizations
+- [ ] **Spectrum Heatmap**: Color-coded frequency magnitude visualization.
+- [ ] **Energy Distribution Chart**: Bar/line chart showing energy across frequency bands.
+- [ ] **Time-Frequency Analysis** (for DWT/WPT): Show time-frequency tiling.
+- [ ] **Directional Analysis** (for DT-CWT): Show directional energy distribution.
+
+#### 4.3 Comparative Analysis
+- [ ] **Multi-Image Comparison**: 
+  - Compare frequency band ratios across multiple images.
+  - Side-by-side spectrum visualization.
+  - Statistical comparison (mean, std dev of energy ratios).
+- [ ] **Transform Method Comparison**: 
+  - Compare results from different transforms on the same image.
+  - Show which transform best captures specific features.
+
+### Phase 5: User Interface & Interaction
+
+#### 5.1 Transform Selection
+- [ ] **Transform Selector**: Dropdown or button group to select transform method.
+- [ ] **Parameter Controls**: 
+  - DFT: Filter type and cutoff frequency.
+  - DWT: Wavelet type, decomposition levels.
+  - WPT: Tree depth, node selection.
+  - DCT: Block size (if block-based).
+  - DT-CWT: Wavelet type, levels.
+
+#### 5.2 Real-time Processing
+- [ ] **Auto-compute**: Automatically compute transform when image is selected.
+- [ ] **Manual Trigger**: Option to manually trigger computation.
+- [ ] **Progress Indicators**: Show processing status for each image.
+- [ ] **Batch Processing**: Process all selected images in batch.
+
+#### 5.3 Results Display
+- [ ] **Multi-view Layout**: 
+  - Original image view.
+  - Transform coefficient visualization.
+  - Energy statistics panel.
+  - Comparison charts.
+- [ ] **Export Functionality**: 
+  - Export spectrum images.
+  - Export statistics as CSV/JSON.
+  - Export processed images.
+
+### Phase 6: Performance & Optimization
+
+#### 6.1 Large Image Handling
+- [ ] **Image Size Limits**: Warn users about very large images (>2048x2048).
+- [ ] **Downsampling Option**: Allow users to downsample before processing.
+- [ ] **Progressive Loading**: Show low-res preview first, then full resolution.
+
+#### 6.2 Memory Management
+- [ ] **Memory Monitoring**: Track memory usage, warn if approaching limits.
+- [ ] **Automatic Cleanup**: Clean up processed results when images are removed.
+- [ ] **Lazy Loading**: Only compute transforms when requested.
+
+#### 6.3 Performance Optimization
+- [ ] **Web Workers**: Move heavy computations to Web Workers (if possible with OpenCV.js).
+- [ ] **Debouncing**: Debounce parameter changes to avoid excessive recomputation.
+- [ ] **Caching**: Cache transform results for same image + same parameters.
+
+## 5. Visual Style
+- **Theme**: "Scientific Dark". Use deep grays/blacks (`bg-slate-900`, `bg-slate-800`).
+- **Accent**: Cyan/Blue (`text-cyan-400`, `border-cyan-500`, `bg-cyan-500/20`) for interactive elements.
+- **Layout**: 
+  - Three-pane layout (Gallery | Spatial | Frequency) with smooth transitions.
+  - Responsive design with collapsible panels on smaller screens.
+- **Typography**: Clean, modern fonts with proper hierarchy.
+- **Animations**: Smooth transitions and loading states (use Tailwind's transition utilities).
+- **Charts**: Use a charting library (Chart.js, D3.js, or similar) for energy distribution visualization.
+- **Professional Touches**: 
+  - Subtle shadows and borders for depth.
+  - Hover effects on interactive elements.
+  - Loading skeletons instead of spinners where appropriate.
+  - Consistent spacing and padding.
+
+## 6. Technical Implementation Notes
+
+### 6.1 Transform Method Availability
+- **DFT**: ✅ Native OpenCV.js support (`cv.dft`, `cv.idft`).
+- **DCT**: ✅ Native OpenCV.js support (`cv.dct`, `cv.idct`).
+- **DWT**: ⚠️ Not natively supported. Options:
+  - Implement manually using filter banks.
+  - Use JavaScript library like `wavelets` (npm: `wavelets`).
+  - Port C++ implementation to JavaScript.
+- **WPT**: ⚠️ Not natively supported. Need custom implementation.
+- **DT-CWT**: ⚠️ Not natively supported. Most complex, may need specialized library.
+
+### 6.2 Recommended Libraries
+- **Wavelets**: Consider `wavelets` npm package for DWT/WPT implementation.
+- **Charts**: `chart.js` or `vue-chartjs` for energy distribution visualization.
+- **Icons**: Use Heroicons or similar icon library for UI elements.
+
+### 6.3 File Structure
+```
+src/
+├── components/
+│   ├── ImageGallery.vue          # Multi-image gallery
+│   ├── SpatialView.vue           # Original image view
+│   ├── FrequencyView.vue         # Transform visualization
+│   ├── StatisticsPanel.vue      # Energy ratio statistics
+│   ├── TransformSelector.vue     # Transform method selector
+│   └── ParameterControls.vue     # Transform parameters
+├── composables/
+│   ├── useOpenCV.js              # OpenCV.js loader
+│   ├── useImageManager.js        # Multi-image state management
+│   ├── transforms/
+│   │   ├── useDFT.js             # DFT/FFT implementation
+│   │   ├── useDCT.js             # DCT implementation
+│   │   ├── useWavelet.js         # DWT implementation
+│   │   ├── useWaveletPacket.js   # WPT implementation
+│   │   └── useDualTreeCWT.js     # DT-CWT implementation
+│   └── analysis/
+│       ├── useEnergyAnalysis.js  # Energy ratio calculations
+│       └── useVisualization.js   # Advanced visualizations
+└── utils/
+    ├── memoryManager.js          # Memory tracking and cleanup
+    └── performance.js            # Performance utilities
+```
+
+## 7. Success Criteria
+- [ ] Support uploading and managing 10+ images simultaneously.
+- [ ] All 5 transform methods (FFT/DWT/DCT/WPT/DT-CWT) implemented and working.
+- [ ] Accurate frequency band energy ratio calculations for all transforms.
+- [ ] Real-time visualization updates when parameters change.
+- [ ] No memory leaks (verified through browser DevTools).
+- [ ] Smooth performance for images up to 1024x1024 pixels.
+- [ ] Beautiful, professional, and intuitive user interface.
