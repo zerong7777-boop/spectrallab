@@ -54,8 +54,8 @@
             @dragover.prevent
             @drop.prevent="handleDrop"
             class="relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all"
-            :class="selectedImageId === image.id 
-              ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 ring-2 ring-cyan-500/50' 
+            :class="selectedImageId === image.id
+              ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 ring-2 ring-cyan-500/50'
               : 'border-slate-700 hover:border-slate-600 hover:border-cyan-500/50'"
           >
             <!-- Thumbnail -->
@@ -65,7 +65,7 @@
                 :alt="image.name"
                 class="w-full h-full object-cover"
               />
-              
+
               <!-- Processing Overlay -->
               <div
                 v-if="image.processing"
@@ -94,7 +94,7 @@
                 <p class="text-xs text-slate-500">
                   {{ image.width }} × {{ image.height }}
                 </p>
-                <span 
+                <span
                   v-if="selectedImageId === image.id"
                   class="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400"
                 >
@@ -153,7 +153,7 @@ const handleFileSelect = (event) => {
   const files = event.target.files
   if (files && files.length > 0) {
     addImages(files)
-    // 重置 input，允许重复选择相同文件
+    // Reset input to allow re-selecting the same file.
     event.target.value = ''
   }
 }

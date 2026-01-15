@@ -1,7 +1,7 @@
 <template>
   <div class="h-full flex flex-col">
     <h2 class="text-xl font-semibold text-cyan-300 mb-4">空间域视图</h2>
-    
+
     <div class="flex-1 flex items-center justify-center">
       <div v-if="!selectedImage" class="text-center py-12">
         <svg class="w-24 h-24 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -16,7 +16,7 @@
           <span class="text-sm text-cyan-400">选择图像后会自动进行频率域分析</span>
         </div>
       </div>
-      
+
       <div v-else class="w-full max-w-4xl">
         <div class="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-xl">
           <div class="mb-4 flex items-center justify-between">
@@ -30,13 +30,27 @@
               {{ formatFileSize(selectedImage.size) }}
             </div>
           </div>
-          
-          <div class="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
-            <img
-              :src="selectedImage.dataURL"
-              :alt="selectedImage.name"
-              class="w-full h-auto max-h-[60vh] object-contain mx-auto"
-            />
+
+          <div class="grid gap-4" :class="reconstructedSrc ? 'lg:grid-cols-2' : 'grid-cols-1'">
+            <div class="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+              <div class="px-3 py-2 text-xs text-slate-400 border-b border-slate-700">原图</div>
+              <img
+                :src="selectedImage.dataURL"
+                :alt="selectedImage.name"
+                class="w-full h-auto max-h-[60vh] object-contain mx-auto"
+              />
+            </div>
+            <div
+              v-if="reconstructedSrc"
+              class="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900"
+            >
+              <div class="px-3 py-2 text-xs text-slate-400 border-b border-slate-700">重建</div>
+              <img
+                :src="reconstructedSrc"
+                alt="reconstruction"
+                class="w-full h-auto max-h-[60vh] object-contain mx-auto"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -46,6 +60,13 @@
 
 <script setup>
 import { inject } from 'vue'
+
+const { reconstructedSrc } = defineProps({
+  reconstructedSrc: {
+    type: String,
+    default: null,
+  },
+})
 
 const imageManager = inject('imageManager', null)
 

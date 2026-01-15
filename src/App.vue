@@ -38,10 +38,10 @@
       <!-- Center: Spatial View & Controls -->
       <div class="flex-1 flex flex-col overflow-hidden border-x border-slate-800">
         <div class="flex-1 overflow-y-auto p-6">
-          <SpatialView />
+          <SpatialView :reconstructed-src="reconstructedSrc" />
         </div>
         <div class="p-4 border-t border-slate-800 bg-slate-900/50">
-          <TransformSelector 
+          <TransformSelector
             :selected-transform="selectedTransform"
             @update:selected-transform="selectedTransform = $event"
           />
@@ -51,16 +51,20 @@
       <!-- Right: Frequency View & Statistics -->
       <div class="w-96 flex-shrink-0 flex flex-col overflow-hidden">
         <div class="flex-1 overflow-y-auto p-6">
-          <FrequencyView 
-            :image-src="imageManager.selectedImage?.dataURL"
+          <FrequencyView
+            :image-id="selectedImage?.id"
+            :image-src="selectedImage?.dataURL"
             :cv="cv"
             :transform-type="selectedTransform"
+            @reconstruction-ready="reconstructedSrc = $event"
+            @stats-ready="frequencyStats = $event"
           />
         </div>
         <div class="p-4 border-t border-slate-800 bg-slate-900/50">
-          <StatisticsPanel 
-            v-if="imageManager.selectedImage"
-            :image="imageManager.selectedImage"
+          <StatisticsPanel
+            v-if="selectedImage"
+            :image="selectedImage"
+            :stats="frequencyStats"
             :transform-type="selectedTransform"
           />
         </div>
@@ -70,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted } from 'vue'
+import { ref, provide, onMounted, watch } from 'vue'
 import { useOpenCV } from './composables/useOpenCV'
 import { useImageManager } from './composables/useImageManager'
 import ImageGallery from './components/ImageGallery.vue'
@@ -81,12 +85,24 @@ import StatisticsPanel from './components/StatisticsPanel.vue'
 
 const { opencvReady, cv, loadOpenCV } = useOpenCV()
 const imageManager = useImageManager()
+const selectedImage = imageManager.selectedImage
 const selectedTransform = ref('DFT')
+const reconstructedSrc = ref(null)
+const frequencyStats = ref(null)
 
-// 提供图像管理器给子组件
 provide('imageManager', imageManager)
 
 onMounted(() => {
   loadOpenCV()
+})
+
+watch(() => selectedImage.value?.id, () => {
+  reconstructedSrc.value = null
+  frequencyStats.value = null
+})
+
+watch(() => selectedTransform.value, () => {
+  reconstructedSrc.value = null
+  frequencyStats.value = null
 })
 </script>
