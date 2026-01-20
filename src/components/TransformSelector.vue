@@ -47,8 +47,8 @@ const transforms = [
   { value: 'DFT', label: 'DFT/FFT', available: true },
   { value: 'DCT', label: 'DCT', available: true },
   { value: 'DWT', label: 'DWT', available: true },
-  { value: 'WPT', label: 'WPT', available: false },
-  { value: 'DT-CWT', label: 'DT-CWT', available: false },
+  { value: 'WPT', label: 'WPT', available: true },
+  { value: 'DT-CWT', label: 'DT-CWT (Exp)', available: true },
 ]
 
 const selectTransform = (value) => {

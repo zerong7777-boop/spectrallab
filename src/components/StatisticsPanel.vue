@@ -79,6 +79,44 @@
         统计信息待生成
       </div>
     </div>
+    <div v-else-if="transformType === 'WPT'" class="space-y-3">
+      <div class="text-xs text-slate-400">
+        <p>变换方法: <span class="text-cyan-400 font-medium">WPT</span></p>
+      </div>
+      <div v-if="stats" class="space-y-3">
+        <div class="space-y-1">
+          <div class="text-xs text-slate-500">节点能量占比</div>
+          <div v-for="node in stats.nodes" :key="node.path" class="flex items-center justify-between text-xs">
+            <span class="text-slate-400">{{ node.path || 'root' }}</span>
+            <span class="text-slate-200 font-medium">{{ formatPercent(node.ratio) }}</span>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <div class="text-xs text-slate-500">层级能量占比</div>
+          <div v-for="item in stats.levelBuckets" :key="item.level" class="flex items-center justify-between text-xs">
+            <span class="text-slate-400">L{{ item.level }}</span>
+            <span class="text-slate-200 font-medium">{{ formatPercent(item.ratio) }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-xs text-slate-500 text-center py-6">
+        统计信息待生成
+      </div>
+    </div>
+    <div v-else-if="transformType === 'DT-CWT'" class="space-y-3">
+      <div class="text-xs text-slate-400">
+        <p>变换方法: <span class="text-cyan-400 font-medium">DT-CWT (Exp)</span></p>
+      </div>
+      <div v-if="stats && stats.perDirectionEnergy" class="space-y-2">
+        <div v-for="dir in stats.perDirectionEnergy" :key="dir.id" class="flex items-center justify-between text-xs">
+          <span class="text-slate-400">{{ dir.label }}</span>
+          <span class="text-slate-200 font-medium">{{ formatPercent(dir.ratio) }}</span>
+        </div>
+      </div>
+      <div v-else class="text-xs text-slate-500 text-center py-6">
+        统计信息待生成
+      </div>
+    </div>
     <div v-else class="text-center py-8 text-slate-500 text-sm">
       <p>{{ transformType }} 统计信息</p>
       <p class="text-xs mt-2 text-slate-600">待实现</p>

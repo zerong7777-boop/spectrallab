@@ -467,23 +467,38 @@ const getMaxLevels = (width, height, levels) => {
   return Math.max(1, Math.min(levels, maxPossible))
 }
 
-const dwt2d = (data, width, height, levels, wavelet) => {
-  const usedWidth = width % 2 === 0 ? width : width - 1
-  const usedHeight = height % 2 === 0 ? height : height - 1
-  const levelCount = getMaxLevels(usedWidth, usedHeight, levels)
-  const coeffs = new Float32Array(usedWidth * usedHeight)
+const getPadSizeForLevels = (width, height, levels) => {
+  const block = 1 << levels
+  const padWidth = Math.ceil(width / block) * block
+  const padHeight = Math.ceil(height / block) * block
+  return { padWidth, padHeight }
+}
 
-  for (let y = 0; y < usedHeight; y += 1) {
-    for (let x = 0; x < usedWidth; x += 1) {
-      coeffs[y * usedWidth + x] = data[y * width + x]
+const padToSize = (data, width, height, padWidth, padHeight) => {
+  const output = new Float32Array(padWidth * padHeight)
+  for (let y = 0; y < height; y += 1) {
+    const srcOffset = y * width
+    const dstOffset = y * padWidth
+    for (let x = 0; x < width; x += 1) {
+      output[dstOffset + x] = data[srcOffset + x]
     }
   }
+  return output
+}
+
+const dwt2d = (data, width, height, levels, wavelet) => {
+  const { padWidth, padHeight } = getPadSizeForLevels(width, height, levels)
+  const levelCount = getMaxLevels(padWidth, padHeight, levels)
+  const padded = padToSize(data, width, height, padWidth, padHeight)
+  const coeffs = new Float32Array(padWidth * padHeight)
+
+  coeffs.set(padded)
 
   const { decLo, decHi } = WAVELETS[wavelet]
 
   for (let level = 1; level <= levelCount; level += 1) {
-    const currentWidth = usedWidth >> (level - 1)
-    const currentHeight = usedHeight >> (level - 1)
+    const currentWidth = padWidth >> (level - 1)
+    const currentHeight = padHeight >> (level - 1)
     const halfWidth = currentWidth / 2
     const halfHeight = currentHeight / 2
     const rowTemp = new Float32Array(currentWidth * currentHeight)
@@ -491,7 +506,7 @@ const dwt2d = (data, width, height, levels, wavelet) => {
     for (let r = 0; r < currentHeight; r += 1) {
       const row = new Float32Array(currentWidth)
       for (let c = 0; c < currentWidth; c += 1) {
-        row[c] = coeffs[r * usedWidth + c]
+        row[c] = coeffs[r * padWidth + c]
       }
       const { low, high } = dwt1d(row, currentWidth, decLo, decHi)
       for (let c = 0; c < halfWidth; c += 1) {
@@ -500,33 +515,33 @@ const dwt2d = (data, width, height, levels, wavelet) => {
       }
     }
 
-    for (let c = 0; c < currentWidth; c += 1) {
-      const column = new Float32Array(currentHeight)
-      for (let r = 0; r < currentHeight; r += 1) {
-        column[r] = rowTemp[r * currentWidth + c]
+      for (let c = 0; c < currentWidth; c += 1) {
+        const column = new Float32Array(currentHeight)
+        for (let r = 0; r < currentHeight; r += 1) {
+          column[r] = rowTemp[r * currentWidth + c]
+        }
+        const { low, high } = dwt1d(column, currentHeight, decLo, decHi)
+        for (let r = 0; r < halfHeight; r += 1) {
+          coeffs[r * padWidth + c] = low[r]
+          coeffs[(r + halfHeight) * padWidth + c] = high[r]
+        }
       }
-      const { low, high } = dwt1d(column, currentHeight, decLo, decHi)
-      for (let r = 0; r < halfHeight; r += 1) {
-        coeffs[r * usedWidth + c] = low[r]
-        coeffs[(r + halfHeight) * usedWidth + c] = high[r]
-      }
-    }
   }
 
   return {
     coefficients: coeffs,
-    usedSize: { width: usedWidth, height: usedHeight },
+    padSize: { width: padWidth, height: padHeight },
     levelCount,
   }
 }
 
-const idwt2d = (coeffs, usedWidth, usedHeight, levels, wavelet) => {
+const idwt2d = (coeffs, padWidth, padHeight, levels, wavelet) => {
   const output = new Float32Array(coeffs)
   const { recLo, recHi } = WAVELETS[wavelet]
 
   for (let level = levels; level >= 1; level -= 1) {
-    const currentWidth = usedWidth >> (level - 1)
-    const currentHeight = usedHeight >> (level - 1)
+    const currentWidth = padWidth >> (level - 1)
+    const currentHeight = padHeight >> (level - 1)
     const halfWidth = currentWidth / 2
     const halfHeight = currentHeight / 2
     const colTemp = new Float32Array(currentWidth * currentHeight)
@@ -535,8 +550,8 @@ const idwt2d = (coeffs, usedWidth, usedHeight, levels, wavelet) => {
       const low = new Float32Array(halfHeight)
       const high = new Float32Array(halfHeight)
       for (let r = 0; r < halfHeight; r += 1) {
-        low[r] = output[r * usedWidth + c]
-        high[r] = output[(r + halfHeight) * usedWidth + c]
+        low[r] = output[r * padWidth + c]
+        high[r] = output[(r + halfHeight) * padWidth + c]
       }
       const column = idwt1d(low, high, currentHeight, recLo, recHi)
       for (let r = 0; r < currentHeight; r += 1) {
@@ -553,9 +568,101 @@ const idwt2d = (coeffs, usedWidth, usedHeight, levels, wavelet) => {
       }
       const row = idwt1d(low, high, currentWidth, recLo, recHi)
       for (let c = 0; c < currentWidth; c += 1) {
-        output[r * usedWidth + c] = row[c]
+        output[r * padWidth + c] = row[c]
       }
     }
+  }
+
+  return output
+}
+
+const dwt2dSingle = (data, width, height, wavelet) => {
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const { decLo, decHi } = WAVELETS[wavelet]
+
+  const lowRows = new Float32Array(height * halfWidth)
+  const highRows = new Float32Array(height * halfWidth)
+
+  for (let r = 0; r < height; r += 1) {
+    const row = data.subarray(r * width, r * width + width)
+    const { low, high } = dwt1d(row, width, decLo, decHi)
+    lowRows.set(low, r * halfWidth)
+    highRows.set(high, r * halfWidth)
+  }
+
+  const ll = new Float32Array(halfWidth * halfHeight)
+  const lh = new Float32Array(halfWidth * halfHeight)
+  const hl = new Float32Array(halfWidth * halfHeight)
+  const hh = new Float32Array(halfWidth * halfHeight)
+
+  for (let c = 0; c < halfWidth; c += 1) {
+    const lowColumn = new Float32Array(height)
+    const highColumn = new Float32Array(height)
+    for (let r = 0; r < height; r += 1) {
+      lowColumn[r] = lowRows[r * halfWidth + c]
+      highColumn[r] = highRows[r * halfWidth + c]
+    }
+    const lowSplit = dwt1d(lowColumn, height, decLo, decHi)
+    const highSplit = dwt1d(highColumn, height, decLo, decHi)
+    for (let r = 0; r < halfHeight; r += 1) {
+      ll[r * halfWidth + c] = lowSplit.low[r]
+      lh[r * halfWidth + c] = lowSplit.high[r]
+      hl[r * halfWidth + c] = highSplit.low[r]
+      hh[r * halfWidth + c] = highSplit.high[r]
+    }
+  }
+
+  return {
+    ll,
+    lh,
+    hl,
+    hh,
+    width: halfWidth,
+    height: halfHeight,
+  }
+}
+
+const idwt2dSingle = (ll, lh, hl, hh, width, height, wavelet) => {
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const { recLo, recHi } = WAVELETS[wavelet]
+
+  const lowCols = new Float32Array(width * height)
+  const highCols = new Float32Array(width * height)
+
+  for (let c = 0; c < halfWidth; c += 1) {
+    const low = new Float32Array(halfHeight)
+    const high = new Float32Array(halfHeight)
+    const lowHigh = new Float32Array(halfHeight)
+    const highHigh = new Float32Array(halfHeight)
+
+    for (let r = 0; r < halfHeight; r += 1) {
+      low[r] = ll[r * halfWidth + c]
+      high[r] = lh[r * halfWidth + c]
+      lowHigh[r] = hl[r * halfWidth + c]
+      highHigh[r] = hh[r * halfWidth + c]
+    }
+
+    const lowColumn = idwt1d(low, high, height, recLo, recHi)
+    const highColumn = idwt1d(lowHigh, highHigh, height, recLo, recHi)
+
+    for (let r = 0; r < height; r += 1) {
+      lowCols[r * width + c] = lowColumn[r]
+      highCols[r * width + c] = highColumn[r]
+    }
+  }
+
+  const output = new Float32Array(width * height)
+  for (let r = 0; r < height; r += 1) {
+    const lowRow = new Float32Array(halfWidth)
+    const highRow = new Float32Array(halfWidth)
+    for (let c = 0; c < halfWidth; c += 1) {
+      lowRow[c] = lowCols[r * width + c]
+      highRow[c] = highCols[r * width + c]
+    }
+    const row = idwt1d(lowRow, highRow, width, recLo, recHi)
+    output.set(row, r * width)
   }
 
   return output
@@ -575,14 +682,15 @@ export function computeDWTCoefficients(srcMat, wavelet, levels, cv) {
       tempGray.delete()
     }
 
-    const result = dwt2d(gray.data32F, gray.cols, gray.rows, levels, wavelet)
+    const waveletName = WAVELETS[wavelet] ? wavelet : 'haar'
+    const result = dwt2d(gray.data32F, gray.cols, gray.rows, levels, waveletName)
     return {
       coefficients: result.coefficients,
       meta: {
         origSize: { width: srcMat.cols, height: srcMat.rows },
-        usedSize: result.usedSize,
+        padSize: result.padSize,
         levelCount: result.levelCount,
-        wavelet,
+        wavelet: waveletName,
       },
     }
   } finally {
@@ -711,6 +819,154 @@ export function computeIDCTImage(coefficients, meta, cv) {
 
 export const getDwtWavelets = () => Object.keys(WAVELETS)
 
+const DTCWT_KERNELS = [
+  { id: 'dir0', label: '0°', angle: 0, data: [-1, 0, 1, -2, 0, 2, -1, 0, 1] },
+  { id: 'dir30', label: '30°', angle: 30, data: [-1, -1, 2, -1, 2, 1, 2, 1, -1] },
+  { id: 'dir60', label: '60°', angle: 60, data: [-1, 2, 1, -1, 2, 1, -1, -1, 2] },
+  { id: 'dir90', label: '90°', angle: 90, data: [-1, -2, -1, 0, 0, 0, 1, 2, 1] },
+  { id: 'dir120', label: '120°', angle: 120, data: [2, 1, -1, 1, 2, -1, -1, -1, 2] },
+  { id: 'dir150', label: '150°', angle: 150, data: [2, -1, -1, 1, 2, -1, -1, 1, 2] },
+]
+
+const createKernelMat = (kernel, cv) => cv.matFromArray(3, 3, cv.CV_32F, kernel)
+
+export function computeDTCWTExperimental(srcMat, cv) {
+  let gray = null
+  let lowpass = null
+  const directions = []
+
+  try {
+    gray = new cv.Mat()
+    if (srcMat.channels() === 1) {
+      srcMat.convertTo(gray, cv.CV_32F)
+    } else {
+      const tempGray = new cv.Mat()
+      cv.cvtColor(srcMat, tempGray, cv.COLOR_BGR2GRAY)
+      tempGray.convertTo(gray, cv.CV_32F)
+      tempGray.delete()
+    }
+
+    lowpass = new cv.Mat()
+    cv.GaussianBlur(gray, lowpass, new cv.Size(5, 5), 0)
+
+    DTCWT_KERNELS.forEach((kernel) => {
+      const kernelMat = createKernelMat(kernel.data, cv)
+      const response = new cv.Mat()
+      cv.filter2D(gray, response, cv.CV_32F, kernelMat)
+      directions.push({
+        id: kernel.id,
+        label: kernel.label,
+        angle: kernel.angle,
+        data: new Float32Array(response.data32F),
+      })
+      response.delete()
+      kernelMat.delete()
+    })
+
+    return {
+      directions,
+      lowpass: new Float32Array(lowpass.data32F),
+      meta: {
+        origSize: { width: srcMat.cols, height: srcMat.rows },
+        size: { width: gray.cols, height: gray.rows },
+      },
+    }
+  } finally {
+    if (gray) gray.delete()
+    if (lowpass) lowpass.delete()
+  }
+}
+
+export function computeDTCWTDisplay(directions, size, cv) {
+  const rows = size.height
+  const cols = size.width
+  const gridCols = 3
+  const gridRows = 2
+  const tileWidth = Math.floor(cols / gridCols)
+  const tileHeight = Math.floor(rows / gridRows)
+  const mosaic = new Float32Array(cols * rows)
+
+  directions.forEach((dir, index) => {
+    const row = Math.floor(index / gridCols)
+    const col = index % gridCols
+    for (let y = 0; y < tileHeight; y += 1) {
+      const dstOffset = (row * tileHeight + y) * cols + col * tileWidth
+      const srcOffset = y * tileWidth
+      mosaic.set(dir.data.subarray(srcOffset, srcOffset + tileWidth), dstOffset)
+    }
+  })
+
+  let absMat = null
+  let logMat = null
+  let normalized = null
+  let ones = null
+  let zeros = null
+  let coeffMat = null
+
+  try {
+    coeffMat = cv.matFromArray(rows, cols, cv.CV_32F, mosaic)
+    absMat = new cv.Mat()
+    zeros = new cv.Mat.zeros(rows, cols, cv.CV_32F)
+    cv.absdiff(coeffMat, zeros, absMat)
+
+    logMat = new cv.Mat()
+    ones = new cv.Mat.ones(rows, cols, cv.CV_32F)
+    cv.add(absMat, ones, logMat)
+    cv.log(logMat, logMat)
+
+    normalized = new cv.Mat()
+    cv.normalize(logMat, normalized, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
+
+    return normalized
+  } finally {
+    if (coeffMat) coeffMat.delete()
+    if (absMat) absMat.delete()
+    if (logMat) logMat.delete()
+    if (ones) ones.delete()
+    if (zeros) zeros.delete()
+  }
+}
+
+export function computeDTCWTInverse(directions, lowpass, size, cv) {
+  const combined = new Float32Array(size.width * size.height)
+
+  for (const dir of directions) {
+    for (let i = 0; i < combined.length; i += 1) {
+      combined[i] += dir.data[i]
+    }
+  }
+  for (let i = 0; i < combined.length; i += 1) {
+    combined[i] += lowpass[i]
+  }
+
+  let mat = null
+  let normalized = null
+
+  try {
+    mat = cv.matFromArray(size.height, size.width, cv.CV_32F, combined)
+    normalized = new cv.Mat()
+    cv.normalize(mat, normalized, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
+    return normalized
+  } finally {
+    if (mat) mat.delete()
+  }
+}
+
+export function computeDTCWTStats(directions) {
+  const energies = directions.map((dir) => dir.data.reduce((sum, value) => sum + value * value, 0))
+  const totalEnergy = energies.reduce((sum, value) => sum + value, 0)
+  const perDirectionEnergy = directions.map((dir, index) => ({
+    id: dir.id,
+    label: dir.label,
+    ratio: totalEnergy > 0 ? (energies[index] / totalEnergy) * 100 : 0,
+  }))
+
+  return {
+    totalEnergy,
+    perDirectionEnergy,
+  }
+}
+
 export function computeDWTDisplayFromCoefficients(coefficients, size, cv) {
   let absMat = null
   let logMat = null
@@ -744,25 +1000,20 @@ export function computeDWTDisplayFromCoefficients(coefficients, size, cv) {
 }
 
 export function computeIDWTImage(coefficients, meta, cv) {
-  const reconstructed = idwt2d(coefficients, meta.usedSize.width, meta.usedSize.height, meta.levelCount, meta.wavelet)
+  const reconstructed = idwt2d(coefficients, meta.padSize.width, meta.padSize.height, meta.levelCount, meta.wavelet)
   let mat = null
   let normalized = null
 
   try {
-    mat = cv.matFromArray(meta.usedSize.height, meta.usedSize.width, cv.CV_32F, reconstructed)
+    mat = cv.matFromArray(meta.padSize.height, meta.padSize.width, cv.CV_32F, reconstructed)
     normalized = new cv.Mat()
     cv.normalize(mat, normalized, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
 
-    if (meta.usedSize.width === meta.origSize.width && meta.usedSize.height === meta.origSize.height) {
-      return normalized
-    }
-
-    const padded = new cv.Mat.zeros(meta.origSize.height, meta.origSize.width, cv.CV_8U)
-    const roi = padded.roi(new cv.Rect(0, 0, meta.usedSize.width, meta.usedSize.height))
-    normalized.copyTo(roi)
+    const roi = normalized.roi(new cv.Rect(0, 0, meta.origSize.width, meta.origSize.height))
+    const cropped = roi.clone()
     roi.delete()
     normalized.delete()
-    return padded
+    return cropped
   } finally {
     if (mat) mat.delete()
   }
@@ -770,7 +1021,7 @@ export function computeIDWTImage(coefficients, meta, cv) {
 
 export function applyDWTFilter(coefficients, meta, filter) {
   const output = new Float32Array(coefficients)
-  const { width, height } = meta.usedSize
+  const { width, height } = meta.padSize
   const levels = meta.levelCount
 
   const threshold = filter?.threshold ?? 0
@@ -811,7 +1062,7 @@ export function applyDWTFilter(coefficients, meta, filter) {
 }
 
 export function computeDWTStats(coefficients, meta) {
-  const { width, height } = meta.usedSize
+  const { width, height } = meta.padSize
   const levels = meta.levelCount
   let totalEnergy = 0
 
@@ -865,6 +1116,252 @@ export function computeDWTStats(coefficients, meta) {
     llRatio: totalEnergy > 0 ? (llEnergy / totalEnergy) * 100 : 0,
     detailRatio: totalEnergy > 0 ? (detailEnergy / totalEnergy) * 100 : 0,
     levelDetails,
+  }
+}
+
+export function computeWPTCoefficients(srcMat, wavelet, levels, cv) {
+  let gray = null
+
+  try {
+    gray = new cv.Mat()
+    if (srcMat.channels() === 1) {
+      srcMat.convertTo(gray, cv.CV_32F)
+    } else {
+      const tempGray = new cv.Mat()
+      cv.cvtColor(srcMat, tempGray, cv.COLOR_BGR2GRAY)
+      tempGray.convertTo(gray, cv.CV_32F)
+      tempGray.delete()
+    }
+
+    const waveletName = WAVELETS[wavelet] ? wavelet : 'haar'
+    const { padWidth, padHeight } = getPadSizeForLevels(gray.cols, gray.rows, levels)
+    const levelCount = getMaxLevels(padWidth, padHeight, levels)
+    const padded = padToSize(gray.data32F, gray.cols, gray.rows, padWidth, padHeight)
+    const nodes = []
+
+    const buildNodes = (data, width, height, level, path) => {
+      const currentLevel = levelCount - level
+      const energy = data.reduce((sum, value) => sum + value * value, 0)
+      nodes.push({
+        id: path || 'root',
+        path,
+        level: currentLevel,
+        width,
+        height,
+        data,
+        energy,
+        isLeaf: level === 0,
+      })
+
+      if (level === 0) {
+        return
+      }
+
+      const { ll, lh, hl, hh, width: nextWidth, height: nextHeight } = dwt2dSingle(data, width, height, waveletName)
+      buildNodes(ll, nextWidth, nextHeight, level - 1, path ? `${path}/LL` : 'LL')
+      buildNodes(lh, nextWidth, nextHeight, level - 1, path ? `${path}/LH` : 'LH')
+      buildNodes(hl, nextWidth, nextHeight, level - 1, path ? `${path}/HL` : 'HL')
+      buildNodes(hh, nextWidth, nextHeight, level - 1, path ? `${path}/HH` : 'HH')
+    }
+
+    buildNodes(padded, padWidth, padHeight, levelCount, '')
+
+    const root = nodes.find((node) => node.path === '')
+    const totalEnergy = root ? root.energy : nodes.reduce((sum, node) => sum + node.energy, 0)
+
+    return {
+      nodes,
+      meta: {
+        origSize: { width: srcMat.cols, height: srcMat.rows },
+        padSize: { width: padWidth, height: padHeight },
+        wavelet: waveletName,
+        levelCount,
+        totalEnergy,
+      },
+    }
+  } finally {
+    if (gray) gray.delete()
+  }
+}
+
+const getLeafTilePosition = (path) => {
+  if (!path) {
+    return { row: 0, col: 0 }
+  }
+  const parts = path.split('/')
+  let row = 0
+  let col = 0
+  for (const part of parts) {
+    const rowBit = part[0] === 'H' ? 1 : 0
+    const colBit = part[1] === 'H' ? 1 : 0
+    row = row * 2 + rowBit
+    col = col * 2 + colBit
+  }
+  return { row, col }
+}
+
+export function computeWPTDisplayFromNodes(nodes, meta, cv) {
+  const leafNodes = nodes.filter((node) => node.isLeaf)
+  const levels = meta.levelCount
+  const grid = 1 << levels
+  const tileWidth = meta.padSize.width / grid
+  const tileHeight = meta.padSize.height / grid
+  const mosaic = new Float32Array(meta.padSize.width * meta.padSize.height)
+
+  for (const node of leafNodes) {
+    const { row, col } = getLeafTilePosition(node.path)
+    const startX = col * tileWidth
+    const startY = row * tileHeight
+    for (let y = 0; y < tileHeight; y += 1) {
+      const dstOffset = (startY + y) * meta.padSize.width + startX
+      const srcOffset = y * tileWidth
+      mosaic.set(node.data.subarray(srcOffset, srcOffset + tileWidth), dstOffset)
+    }
+  }
+
+  let absMat = null
+  let logMat = null
+  let normalized = null
+  let ones = null
+  let zeros = null
+  let coeffMat = null
+
+  try {
+    coeffMat = cv.matFromArray(meta.padSize.height, meta.padSize.width, cv.CV_32F, mosaic)
+    absMat = new cv.Mat()
+    zeros = new cv.Mat.zeros(meta.padSize.height, meta.padSize.width, cv.CV_32F)
+    cv.absdiff(coeffMat, zeros, absMat)
+
+    logMat = new cv.Mat()
+    ones = new cv.Mat.ones(absMat.rows, absMat.cols, cv.CV_32F)
+    cv.add(absMat, ones, logMat)
+    cv.log(logMat, logMat)
+
+    normalized = new cv.Mat()
+    cv.normalize(logMat, normalized, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
+
+    return normalized
+  } finally {
+    if (coeffMat) coeffMat.delete()
+    if (absMat) absMat.delete()
+    if (logMat) logMat.delete()
+    if (ones) ones.delete()
+    if (zeros) zeros.delete()
+  }
+}
+
+export function computeIWPTImage(nodes, meta, cv) {
+  const levels = meta.levelCount
+  const leafNodes = nodes.filter((node) => node.isLeaf)
+  const leafMap = new Map()
+  for (const node of leafNodes) {
+    leafMap.set(node.path, node.data)
+  }
+
+  const reconstructNode = (path, level) => {
+    if (level === levels) {
+      return leafMap.get(path) || new Float32Array((meta.padSize.width >> levels) * (meta.padSize.height >> levels))
+    }
+    const nextLevel = level + 1
+    const ll = reconstructNode(path ? `${path}/LL` : 'LL', nextLevel)
+    const lh = reconstructNode(path ? `${path}/LH` : 'LH', nextLevel)
+    const hl = reconstructNode(path ? `${path}/HL` : 'HL', nextLevel)
+    const hh = reconstructNode(path ? `${path}/HH` : 'HH', nextLevel)
+    const width = meta.padSize.width >> level
+    const height = meta.padSize.height >> level
+    return idwt2dSingle(ll, lh, hl, hh, width, height, meta.wavelet)
+  }
+
+  const reconstructed = reconstructNode('', 0)
+  let mat = null
+  let normalized = null
+
+  try {
+    mat = cv.matFromArray(meta.padSize.height, meta.padSize.width, cv.CV_32F, reconstructed)
+    normalized = new cv.Mat()
+    cv.normalize(mat, normalized, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
+
+    const roi = normalized.roi(new cv.Rect(0, 0, meta.origSize.width, meta.origSize.height))
+    const cropped = roi.clone()
+    roi.delete()
+    normalized.delete()
+    return cropped
+  } finally {
+    if (mat) mat.delete()
+  }
+}
+
+export function computeWPTStats(nodes, meta) {
+  const leafNodes = nodes.filter((node) => node.isLeaf)
+  const leafEnergy = new Map()
+  let totalEnergy = 0
+
+  for (const node of leafNodes) {
+    const energy = node.data.reduce((sum, value) => sum + value * value, 0)
+    leafEnergy.set(node.path, energy)
+    totalEnergy += energy
+  }
+
+  const nodeMap = new Map()
+  nodes.forEach((node) => {
+    nodeMap.set(node.id, {
+      id: node.id,
+      path: node.path,
+      level: node.level,
+      energy: 0,
+      energyRatio: 0,
+      parentId: node.path ? node.path.split('/').slice(0, -1).join('/') || 'root' : null,
+      childrenIds: [],
+      isLeaf: node.isLeaf,
+    })
+  })
+
+  for (const node of nodeMap.values()) {
+    if (node.parentId && nodeMap.has(node.parentId)) {
+      nodeMap.get(node.parentId).childrenIds.push(node.id)
+    }
+  }
+
+  for (const [path, energy] of leafEnergy.entries()) {
+    let current = path || 'root'
+    while (current) {
+      const node = nodeMap.get(current)
+      if (node) {
+        node.energy += energy
+      }
+      const parent = current.split('/').slice(0, -1).join('/')
+      current = parent || (current === 'root' ? null : 'root')
+    }
+  }
+
+  for (const node of nodeMap.values()) {
+    node.energyRatio = totalEnergy > 0 ? node.energy / totalEnergy : 0
+  }
+
+  const leafStats = leafNodes.map((node) => ({
+    path: node.path,
+    ratio: totalEnergy > 0 ? (leafEnergy.get(node.path) / totalEnergy) * 100 : 0,
+    level: node.level,
+  }))
+  leafStats.sort((a, b) => b.ratio - a.ratio)
+
+  const levelBuckets = Array.from({ length: meta.levelCount + 1 }, (_, index) => ({
+    level: index,
+    ratio: 0,
+  }))
+
+  for (const stat of leafStats) {
+    const bucket = levelBuckets[stat.level]
+    if (bucket) {
+      bucket.ratio += stat.ratio
+    }
+  }
+
+  return {
+    totalEnergy,
+    nodes: Array.from(nodeMap.values()),
+    leafNodes: leafStats,
+    levelBuckets,
   }
 }
 
