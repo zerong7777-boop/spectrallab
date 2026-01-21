@@ -18,37 +18,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
-      - name: Install
-        run: npm ci
+      - run: npm ci
+      - run: npm run build
 
-      - name: Build
-        run: npm run build
-
-      # 可选：如果你用了 Vue Router history 模式，刷新子路由会 404，
-      # 加这一行可以把 index.html 复制成 404.html 做 fallback
-      - name: SPA fallback (optional)
-        run: |
+      - run: |
+          touch dist/.nojekyll
           if [ -f dist/index.html ]; then cp dist/index.html dist/404.html; fi
 
-      # 可选：防止任何 Jekyll 相关处理（一般 Actions Pages 不需要，但加了也无害）
-      - name: Disable Jekyll (optional)
-        run: |
-          touch dist/.nojekyll
+      - uses: actions/configure-pages@v5
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
@@ -59,6 +45,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
