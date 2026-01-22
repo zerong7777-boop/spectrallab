@@ -1,6 +1,6 @@
 # SpectralLab
 
-专业的频率域图像分析工具，用于实时 FFT（快速傅里叶变换）、频率滤波和 iFFT（逆 FFT）重建。
+专业的频率域图像分析工具，聚焦图像在频域/系数域的可视化、滤波与重建，支持 DFT/FFT、DCT、DWT 等多条变换链路。
 
 ## Live Demo
 https://zerong7777-boop.github.io/spectrallab/  
@@ -36,16 +36,18 @@ npm run build:pages
 
 ## 功能特性
 
-- ✅ **实时 FFT 计算**：上传图片后自动计算频率域频谱
-- ✅ **Log-Magnitude 可视化**：使用对数缩放使高频分量可见
-- ✅ **FFT Shift**：零频率（DC 分量）位于频谱图中心
-- ✅ **科学深色主题**：专业的视觉设计
-- ✅ **OpenCV.js 内存管理**：严格的内存管理，防止浏览器崩溃
+- ✅ **多图像管理**：上传/选择/删除/清空，首张图片自动选中
+- ✅ **多变换链路**：DFT/FFT、DCT、DWT（Haar、db2）
+- ✅ **频域/系数域可视化**：Log + normalize，支持 FFT Shift
+- ✅ **多种滤波器**：理想/高斯 低通、高通、带通、带阻
+- ✅ **重建与对比**：iFFT/iDCT/iDWT 实时重建，空间域对比
+- ✅ **统计面板**：基于 raw 能量的统计与占比展示
+- ✅ **严格内存管理**：OpenCV.js 对象手动释放
 
 ## 技术栈
 
 - **Vue 3** (Composition API + `<script setup>`)
-- **Vite** - 快速构建工具
+- **Vite 5** - 快速构建工具
 - **Tailwind CSS v4** - 样式框架
 - **OpenCV.js** (WebAssembly) - 计算机视觉算法
 
@@ -73,6 +75,8 @@ spectrallab/
 │   ├── components/          # Vue 组件
 │   │   ├── SpatialView.vue  # 空间域视图（左侧）
 │   │   └── FrequencyView.vue # 频率域视图（右侧）
+│   │   ├── StatisticsPanel.vue # 统计面板
+│   │   └── TransformSelector.vue # 变换选择
 │   ├── composables/         # 组合式函数
 │   │   ├── useOpenCV.js     # OpenCV.js 加载管理
 │   │   └── useFrequency.js  # 频率域处理逻辑
@@ -86,6 +90,7 @@ spectrallab/
 
 ## 核心算法流程
 
+### DFT/FFT 频域流程
 频率域可视化遵循以下标准流程：
 
 1. **灰度化**：转换为 `CV_64F` 单通道
@@ -94,6 +99,10 @@ spectrallab/
 4. **Log 缩放**：应用 `M' = log(1 + M)` 使高频可见
 5. **归一化**：归一化到 [0, 255] 用于显示
 6. **FFT Shift**：象限交换，使零频率位于中心
+
+### DCT / DWT 概览
+- **DCT**：优先 OpenCV.js，失败回退 JS DCT-II / iDCT；系数可视化与滤波一致
+- **DWT**：2D DWT / iDWT，多层子带拼图（LL/HL/LH/HH），支持阈值去噪
 
 ## 重要注意事项
 
@@ -114,21 +123,30 @@ try {
 
 ❌ **不要**将 `cv.Mat` 对象包装在 Vue 的 `ref()` 或 `reactive()` 中，这会导致性能问题和错误。
 
+## 当前进度（概览）
+
+已完成：
+- DFT/FFT、DCT、DWT 的基础链路与展示
+- 多种滤波器与参数交互
+- iFFT / iDCT / iDWT 重建与空间域对比
+- 统计口径统一与展示
+
+已知问题与风险：
+- DCT 回退为纯 JS 时，大图性能可能较慢
+- DWT 在奇数尺寸图像时会截断到偶数尺寸（需 UI 提示）
+- 统计基于能量归一，存在轻微浮点误差
+
 ## 路线图
 
-### Phase 1: Setup ✅
-- [x] 初始化 Vue + Tailwind
-- [x] 创建 `useOpenCV` hook
+### M3: WPT（Wavelet Packet Transform）
+- 分解与重建到 level=3
+- packet 节点选择与掩码
+- packet 能量直方图与统计
 
-### Phase 2: Core FFT ✅
-- [x] 实现 `SpatialView` 和 `FrequencyView`
-- [x] 实现 `fftShift` 算法
-- [x] 渲染 Log-Magnitude 频谱到 Canvas
-
-### Phase 3: Filtering (待实现)
-- [ ] 实现逆 DFT (iFFT) 重建图像
-- [ ] 创建掩码生成器（圆形理想/高斯滤波器）
-- [ ] 实时交互：修改频谱 -> iFFT -> 更新空间域视图
+### M4: DT-CWT（Dual-Tree Complex Wavelet Transform）
+- 方向选择性子带可视化
+- 简单滤波 + 重建
+- 标注为实验特性
 
 ## 许可证
 
