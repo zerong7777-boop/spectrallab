@@ -2,6 +2,29 @@
 
 专业的频率域图像分析工具，用于实时 FFT（快速傅里叶变换）、频率滤波和 iFFT（逆 FFT）重建。
 
+## 在线访问
+https://zerong7777-boop.github.io/spectrallab/
+
+## 本地运行
+```bash
+npm i
+npm run dev
+```
+
+## 部署说明（GitHub Pages）
+- 使用 GitHub Actions 构建并发布 `dist/` 到 Pages（见 `.github/workflows/deploy.yml`）。
+- Pages 设置只需一次：仓库 Settings → Pages → Source 选择 **GitHub Actions**。
+- Project Pages 需要 `base` 为 `/spectrallab/`，本地开发仍为 `/`，已在 `vite.config.js` 中根据 mode 区分。
+
+## 旧地址跳转策略（建议）
+旧地址（若曾使用旧仓库名）：`https://zerong7777-boop.github.io/spectrallab.github.io/`  
+最小方案：在旧仓库 Pages 部署一个静态跳转页（`index.html` meta refresh/JS），指向新地址。
+
+## 排障清单
+- 打开后白屏/404：检查 `vite.config.js` 的 `base` 是否为 `/spectrallab/`（生产环境）。
+- OpenCV/WASM 加载失败：检查控制台 Network 与 OpenCV.js 资源加载路径。
+- 部署不生效：确认 Actions 已执行成功，Pages Source 已设为 GitHub Actions。
+
 ## 功能特性
 
 - ✅ **实时 FFT 计算**：上传图片后自动计算频率域频谱

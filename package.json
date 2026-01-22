@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "vite build --base=/spectrallab/",
     "preview": "vite preview",
     "build-css": "postcss src/input.css -o dist/output.css",
     "watch-css": "postcss src/input.css -o dist/output.css --watch"

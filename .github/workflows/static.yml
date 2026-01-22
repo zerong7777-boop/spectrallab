@@ -22,11 +22,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "18"
           cache: "npm"
 
       - run: npm ci
       - run: npm run build:pages
+
       - name: Guard base
         run: |
           echo "---- dist/index.html head ----"
