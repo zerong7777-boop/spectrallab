@@ -2,28 +2,37 @@
 
 专业的频率域图像分析工具，用于实时 FFT（快速傅里叶变换）、频率滤波和 iFFT（逆 FFT）重建。
 
-## 在线访问
-https://zerong7777-boop.github.io/spectrallab/
+## Live Demo
+https://zerong7777-boop.github.io/spectrallab/  
+这是 GitHub Pages Project Site（子路径 `/spectrallab/`）。
 
-## 本地运行
+## Local Development
+Node 版本建议：Node 18+（Vite 5 要求）
+
+安装与启动：
 ```bash
-npm i
+npm ci
 npm run dev
 ```
 
-## 部署说明（GitHub Pages）
-- 使用 GitHub Actions 构建并发布 `dist/` 到 Pages（见 `.github/workflows/deploy.yml`）。
-- Pages 设置只需一次：仓库 Settings → Pages → Source 选择 **GitHub Actions**。
-- Project Pages 需要 `base` 为 `/spectrallab/`，本地开发仍为 `/`，已在 `vite.config.js` 中根据 mode 区分。
+说明：当前 `vite.config.js` 的 `base` 已硬编码为 `/spectrallab/`，本地开发会走 `/spectrallab/` 子路径。
+若需要本地用 `/` 路径访问，可以临时改回 `/` 或使用 `vite --base=/` 启动。
 
-## 旧地址跳转策略（建议）
-旧地址（若曾使用旧仓库名）：`https://zerong7777-boop.github.io/spectrallab.github.io/`  
-最小方案：在旧仓库 Pages 部署一个静态跳转页（`index.html` meta refresh/JS），指向新地址。
+## Build & Pages Deploy
+生产构建（用于 Pages）：
+```bash
+npm run build:pages
+```
 
-## 排障清单
-- 打开后白屏/404：检查 `vite.config.js` 的 `base` 是否为 `/spectrallab/`（生产环境）。
-- OpenCV/WASM 加载失败：检查控制台 Network 与 OpenCV.js 资源加载路径。
-- 部署不生效：确认 Actions 已执行成功，Pages Source 已设为 GitHub Actions。
+说明：
+- `build:pages` 会强制 `base=/spectrallab/`，保证 `dist/index.html` 引用 `/spectrallab/assets/...`。
+- GitHub Actions 会自动：push `main` 触发 build + deploy。
+- Guard base：若 `dist/index.html` 不包含 `/spectrallab/assets/` 则失败并阻止发布（见 `.github/workflows/static.yml`）。
+
+## Troubleshooting
+- 空白页/404：检查 view-source 是否引用 `/spectrallab/assets/`（而不是 `/assets/`）。
+- 检查 Actions 最新 run 是否通过 Guard base。
+- （可选）浏览器缓存/代理可能导致看到旧 `index.html`，可用 `?v=123` 强制刷新。
 
 ## 功能特性
 
